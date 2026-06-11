@@ -1,0 +1,6 @@
+- id: ssn-check
+  name: Check for 11-digit SSNs
+  description: Scans staged changes for potential 11-digit SSNs and blocks the commit.
+  entry: ssn-precommit
+  language: rust
+  types: [text]
