@@ -1,4 +1,4 @@
-use ssn_precommit::{scan_diff, SsnMatch};
+use ssn_precommit::{SsnMatch, scan_diff};
 use std::collections::HashSet;
 use std::fs;
 use std::process::{Command, ExitCode};
