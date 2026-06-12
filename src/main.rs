@@ -1,13 +1,7 @@
-use regex::Regex;
+use ssn_precommit::{scan_diff, SsnMatch};
 use std::collections::HashSet;
 use std::fs;
 use std::process::{Command, ExitCode};
-
-/// A match found in the diff.
-struct SsnMatch {
-    file: String,
-    ssn: String,
-}
 
 /// Parsed CLI options.
 struct Options {
@@ -22,28 +16,27 @@ fn parse_args() -> Options {
     let mut files = Vec::new();
     let mut args = std::env::args().skip(1).peekable();
 
+    let mut add_ignored = |val: &str| {
+        for s in val.split(',') {
+            let trimmed = s.trim();
+            if !trimmed.is_empty() {
+                ignore.insert(trimmed.to_string());
+            }
+        }
+    };
+
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--no-mask" => mask = false,
             "--mask" => mask = true,
+            // Support both "--ignore val" (space-separated) and "--ignore=val" (joined) styles
             "--ignore" => {
                 if let Some(val) = args.next() {
-                    for s in val.split(',') {
-                        let trimmed = s.trim();
-                        if !trimmed.is_empty() {
-                            ignore.insert(trimmed.to_string());
-                        }
-                    }
+                    add_ignored(&val);
                 }
             }
             a if a.starts_with("--ignore=") => {
-                let val = &a["--ignore=".len()..];
-                for s in val.split(',') {
-                    let trimmed = s.trim();
-                    if !trimmed.is_empty() {
-                        ignore.insert(trimmed.to_string());
-                    }
-                }
+                add_ignored(&a["--ignore=".len()..]);
             }
             _ => files.push(arg),
         }
@@ -85,8 +78,6 @@ fn main() -> ExitCode {
 
 /// Runs `git diff --cached` for the given files and scans added lines for SSNs.
 fn find_ssns_in_staged_diff(files: &[String], ignore: &HashSet<String>) -> Vec<SsnMatch> {
-    // Match 11 consecutive digits, or 6 digits + space + 5 digits
-    let ssn_re = Regex::new(r"\b(\d{11}|\d{6} \d{5})\b").expect("invalid regex");
     let mut matches = Vec::new();
 
     for file in files {
@@ -100,24 +91,7 @@ fn find_ssns_in_staged_diff(files: &[String], ignore: &HashSet<String>) -> Vec<S
         };
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-
-        for line in stdout.lines() {
-            // Only look at added lines (start with '+', but not the +++ header)
-            if !line.starts_with('+') || line.starts_with("+++") {
-                continue;
-            }
-
-            for cap in ssn_re.find_iter(line) {
-                // Normalize by stripping the space so ignore/masking works uniformly
-                let ssn = cap.as_str().replace(' ', "");
-                if !ignore.contains(&ssn) {
-                    matches.push(SsnMatch {
-                        file: file.clone(),
-                        ssn,
-                    });
-                }
-            }
-        }
+        matches.extend(scan_diff(&stdout, file, ignore));
     }
 
     matches
