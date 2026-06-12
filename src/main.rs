@@ -1,5 +1,4 @@
 use regex::Regex;
-use std::io::{self, BufRead, Write};
 use std::process::{Command, ExitCode};
 
 /// A match found in the diff.
@@ -22,13 +21,7 @@ fn main() -> ExitCode {
     }
 
     print_warning(&matches);
-
-    if prompt_user() {
-        ExitCode::SUCCESS
-    } else {
-        eprintln!("Commit aborted.");
-        ExitCode::FAILURE
-    }
+    ExitCode::FAILURE
 }
 
 /// Runs `git diff --cached` for the given files and scans added lines for SSNs.
@@ -83,29 +76,7 @@ fn print_warning(matches: &[SsnMatch]) {
     eprintln!();
     eprintln!("============================================================");
     eprintln!();
-}
-
-/// Prompts the user interactively. Returns true if they want to proceed.
-fn prompt_user() -> bool {
-    // pre-commit connects stdin to /dev/tty for interactive hooks
-    let tty = std::fs::File::open("/dev/tty");
-    let reader: Box<dyn BufRead> = match tty {
-        Ok(f) => Box::new(io::BufReader::new(f)),
-        Err(_) => {
-            eprintln!("Non-interactive terminal. Aborting as a safety measure.");
-            eprintln!("Use `git commit --no-verify` to bypass.");
-            return false;
-        }
-    };
-
-    eprint!("Do you want to proceed with the commit? [y/N] ");
-    io::stderr().flush().ok();
-
-    let mut response = String::new();
-    let mut reader = reader;
-    if reader.read_line(&mut response).is_err() {
-        return false;
-    }
-
-    matches!(response.trim().to_lowercase().as_str(), "y" | "yes")
+    eprintln!("  Commit blocked. If these are not real SSNs, bypass with:");
+    eprintln!("    git commit --no-verify");
+    eprintln!();
 }
