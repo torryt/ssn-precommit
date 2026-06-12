@@ -85,7 +85,8 @@ fn main() -> ExitCode {
 
 /// Runs `git diff --cached` for the given files and scans added lines for SSNs.
 fn find_ssns_in_staged_diff(files: &[String], ignore: &HashSet<String>) -> Vec<SsnMatch> {
-    let ssn_re = Regex::new(r"\b\d{11}\b").expect("invalid regex");
+    // Match 11 consecutive digits, or 6 digits + space + 5 digits
+    let ssn_re = Regex::new(r"\b(\d{11}|\d{6} \d{5})\b").expect("invalid regex");
     let mut matches = Vec::new();
 
     for file in files {
@@ -107,7 +108,8 @@ fn find_ssns_in_staged_diff(files: &[String], ignore: &HashSet<String>) -> Vec<S
             }
 
             for cap in ssn_re.find_iter(line) {
-                let ssn = cap.as_str().to_string();
+                // Normalize by stripping the space so ignore/masking works uniformly
+                let ssn = cap.as_str().replace(' ', "");
                 if !ignore.contains(&ssn) {
                     matches.push(SsnMatch {
                         file: file.clone(),
